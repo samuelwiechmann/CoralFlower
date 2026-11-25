@@ -7,7 +7,7 @@ v=$(realpath "${FM1VST:?set FM1VST to the adapter checkout}")
 build=build/remote
 mkdir -p "$build"
 id=coralflower_expressive
-version=${VERSION:-1.0.0}
+version=${VERSION:-1.1.0}
 emcc -O2 -std=gnu11 -w -mcpu=mvp -msign-ext -mnontrapping-fptoint -mbulk-memory -mmutable-globals \
     -DFM1CORE_RFM1=1 -DFM1CORE_ID="\"$id\"" -DFM1CORE_VERSION="\"$version\"" -DFM1CORE_FAMILY='"choralroot"' \
     -DFM1CORE_COMMIT='"485d60a74fd223b55b3c21f3338cdcf1dbba2f5b"' \

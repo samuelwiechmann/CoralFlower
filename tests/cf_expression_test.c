@@ -40,7 +40,7 @@ int main(void)
     web_step(40);
     web_enc(EMU_E_SELECT, -1);
     web_step(40);
-    assert(cu.scr == SCR_GLO && cu.page[SCR_GLO] == 5);
+    assert(cu.scr == SCR_GLO && cu.page[SCR_GLO] == 6);
     web_enc(EMU_E_K1, 1);
     web_enc(EMU_E_K2, 2);
     web_enc(EMU_E_K3, 1);
@@ -89,7 +89,7 @@ int main(void)
     for (unsigned target = AT_TREMOLO; target < AT_COUNT; ++target) {
         web_enc(EMU_E_K4, 1);
         web_step(900);
-        assert(cf_pressure_target == target);
+        assert(cf_at_amount[target] == 100);
         unsigned hints = cs.seq_hint;
         cs.seq_hint = 0;
         cf_settings_load();

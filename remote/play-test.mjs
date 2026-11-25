@@ -67,6 +67,14 @@ function play(target, lean, mix) {
     assert(samples.some(v => Math.abs(v)>50));
     return samples;
 }
+// Identical time and input history: vary only the amount detents.
+function compareMix(cutSteps, tremSteps) {
+    return play(0,100,[
+        ...Array.from({length:12},(_,i)=>[4,i<cutSteps?-1:0]),
+        [3,1],
+        ...Array.from({length:5},(_,i)=>[4,i<tremSteps?1:0]),
+    ]);
+}
 for (const [i,name] of ['Cutoff','Tremolo','Freq shift','Drive','Phaser'].entries()) {
     const dry = play(i,0), wet = play(i,100);
     const rms = Math.sqrt(dry.reduce((s,v,j)=>s+(v-wet[j])**2,0)/dry.length);
@@ -76,3 +84,9 @@ for (const [i,name] of ['Cutoff','Tremolo','Freq shift','Drive','Phaser'].entrie
 
 
 
+const layered = compareMix(12,5); // 40% cutoff + 25% tremolo
+for (const single of [compareMix(12,0), compareMix(0,5)]) {
+    assert.equal(single.length,layered.length);
+    assert(layered.some((v,i)=>Math.abs(v-single[i])>50));
+}
+console.log('Layered cutoff and tremolo respond independently.');

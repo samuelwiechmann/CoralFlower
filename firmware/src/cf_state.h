@@ -88,6 +88,7 @@ typedef struct {
                                   * cf_sequi.c sq_home_poll): CF_RESUME_ON | pattern 0..7, or CF_RESUME_ON |
                                   * CF_RESUME_SONG | the block the song's frame is on; 0 none. In what was the record's
                                   * padding byte: its size stays, 0.4.1 reads it */
+    uint8_t at_amount[AT_COUNT]; /* Per-route depth, 0..100 percent */
 } cf_set_t;
 #define CF_RESUME_ON 0x80u
 #define CF_RESUME_SONG 0x40u
@@ -140,6 +141,8 @@ static void cs_defaults(cf_set_t *s)
     s->ch_layer = 2;                             /* (channel 3) */
     s->ch_drums = 9;                             /* (channel 10: General MIDI's drums) */
     s->seq_hint = 0;
+    memset(s->at_amount, 0, sizeof s->at_amount);
+    s->at_amount[AT_CUTOFF] = 100;
     s->resume = 0;
 }
 

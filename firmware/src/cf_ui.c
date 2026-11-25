@@ -38,6 +38,7 @@ static uint8_t sq_live_bass(void);              /* (cf_sequi.c) */
 static uint8_t sq_keys_arp(void);               /* (cf_sequi.c: the keys' ARP, a track's own while it is open) */
 /* seq_hint bits 0..2 are the original sequencer hints. The previously zero
  * upper bits keep the assignment without changing the saved record size. */
+static const char *const cf_at_names[AT_COUNT] = {"Cutoff", "Trem", "Shift", "Drive", "Phaser"};
 static unsigned cf_at_target(void)
 {
     unsigned target = cs.seq_hint >> 3;
@@ -46,7 +47,7 @@ static unsigned cf_at_target(void)
 static void cf_send_config(void)                 /* the chord settings -> the audio side */
 {
     fm1_irq_off();
-    cf_pressure_target = (uint8_t)cf_at_target();
+    for (unsigned i = 0; i < AT_COUNT; ++i) cf_at_amount[i] = cs.at_amount[i];
 #ifdef CR_SENSE_KEYS
     cf_sense_config(cs.expression & (CF_EXPR_AT | CF_EXPR_VEL),
                     cs.expression & CF_EXPR_VEL, (cs.expression >> 2) & 7u);
@@ -373,14 +374,21 @@ static void ui_knob_info(int k, cf_knob_t *o)
             if (k == 2) { kfmt(o->name, 12, "LAYER CH"); kint(o->val, cs.ch_layer + 1, 0); }
             if (k == 3) { kfmt(o->name, 12, "DRUMS CH"); kint(o->val, cs.ch_drums + 1, 0); }
             break;
-        case 5:
-            if (k == 0) { kfmt(o->name, 12, "VELOCITY"); kfmt(o->val, 14, cs.expression & CF_EXPR_VEL ? "On" : "Off"); }
+        case 5: /* AT Mix */
+            if (k == 0) { kfmt(o->name, 12, "FX"); kfmt(o->val, 14, cf_at_names[cf_at_target()]); }
+            if (k == 1) { kfmt(o->name, 12, "AMT"); kint(o->val, cs.at_amount[cf_at_target()], "%"); }
+            break;
+        case 6:
+            if (k == 0) { kfmt(o->name, 12, "VEL"); kfmt(o->val, 14, cs.expression & CF_EXPR_VEL ? "On" : "Off"); }
             if (k == 1) { kfmt(o->name, 12, "SENS"); kint(o->val, 3 - (int)((cs.expression >> 2) & 7u), 0); }
-            if (k == 2) { kfmt(o->name, 12, "AFTERTOUCH"); kfmt(o->val, 14, cs.expression & CF_EXPR_AT ? "On" : "Off"); }
+            if (k == 2) { kfmt(o->name, 12, "AT"); kfmt(o->val, 14, cs.expression & CF_EXPR_AT ? "On" : "Off"); }
             if (k == 3) {
-                static const char *const names[] = {"Cutoff", "Tremolo", "Freq shift", "Drive", "Phaser"};
-                kfmt(o->name, 12, "TARGET");
-                kfmt(o->val, 14, names[cf_at_target()]);
+                unsigned i = 0;
+                while (i < AT_COUNT && !cs.at_amount[i]) ++i;
+                const char *label = i == AT_COUNT ? "Off" : cf_at_names[i];
+                while (++i < AT_COUNT) if (cs.at_amount[i]) label = "Multi";
+                kfmt(o->name, 12, "SOLO");
+                kfmt(o->val, 14, label);
             }
             break;
         case 4: /* Reset: K4 the first step */
@@ -597,7 +605,17 @@ static void ui_knob_turn(int k, int d)
                 cs.ch_drums = (uint8_t)clampi(cs.ch_drums + d, 0, 15);
             cf_send_config();
             break;
-        case 5:
+        case 5: /* Browsing leaves all amounts untouched. */
+            if (k == 0) {
+                unsigned target = (unsigned)clampi((int)cf_at_target() + d, 0, AT_COUNT - 1);
+                cs.seq_hint = (uint8_t)((cs.seq_hint & 7u) | (target << 3));
+            } else if (k == 1) {
+                unsigned target = cf_at_target();
+                cs.at_amount[target] = (uint8_t)clampi(cs.at_amount[target] + 5*d, 0, 100);
+            }
+            cf_send_config();
+            break;
+        case 6:
             if (k == 1) {
                 int curve = clampi((int)((cs.expression >> 2) & 7u) - d, 0, 6);
                 cs.expression = (cs.expression & ~28u) | (uint8_t)(curve << 2);
@@ -606,6 +624,8 @@ static void ui_knob_turn(int k, int d)
                 cs.expression = d > 0 ? cs.expression | flag : cs.expression & ~flag;
             } else if (k == 3) {
                 unsigned target = (unsigned)clampi((int)cf_at_target() + d, 0, AT_COUNT - 1);
+                memset(cs.at_amount, 0, sizeof cs.at_amount);
+                cs.at_amount[target] = 100;
                 cs.seq_hint = (uint8_t)((cs.seq_hint & 7u) | (target << 3));
             }
             cf_send_config();
@@ -668,7 +688,7 @@ static void ui_say(const char *a, const char *b)
 static uint32_t screen_pages(uint32_t scr)
 {
     if (scr == SCR_GLO)
-        return 6u;                               /* Expression, Display, MIDI, Channels, Play, Reset */
+        return 7u;                               /* AT Mix, Expression, Display, MIDI, Channels, Play, Reset */
     if (scr == SCR_ENV)
         return 3u;                               /* chord + bass, chord, bass */
     if (scr == SCR_ARP)

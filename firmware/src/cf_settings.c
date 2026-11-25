@@ -34,8 +34,7 @@ typedef struct {
 } cf_rec_t;
 _Static_assert(sizeof(cf_rec_t) <= ST_LOG_MAX, "settings: a record fits one log entry");
 _Static_assert(__builtin_offsetof(cf_set_t, expression) == 181u, "expression occupies legacy padding");
-_Static_assert(sizeof(cf_set_t) == 188u, "settings: 0.4.1 takes a record of this size (a new field fits the padding, "
-               "or a downgrade loses the settings)");
+_Static_assert(__builtin_offsetof(cf_set_t, at_amount) == 188u, "keep the legacy settings prefix");
 _Static_assert(__builtin_offsetof(cf_set_t, notes_in) == 172u && __builtin_offsetof(cf_set_t, mark) == 174u &&
                __builtin_offsetof(cf_set_t, in_ch) == 175u,
                "settings: NOTES IN, the ARP's byte, 0.5's mark and IN CH sit where 0.4.x keeps the looper's four");
@@ -63,6 +62,8 @@ static void cfs_sanitize(cf_set_t *s)
     cf_set_t d;
     uint32_t i;
     cs_defaults(&d);
+    for (unsigned i = 0; i < AT_COUNT; ++i)
+        if (s->at_amount[i] > 100) s->at_amount[i] = 100;
     if (s->chord.algo >= CF_NALGS) s->chord.algo = d.chord.algo;
     if (s->chord.quantize > CF_Q_FULL) s->chord.quantize = d.chord.quantize;
     if (s->chord.tonic > 11u) s->chord.tonic = d.chord.tonic;
@@ -180,6 +181,11 @@ static int cf_settings_load(void)
         return 0;
     cs_defaults(&cs);
     memcpy(&cs, &cf_rec.s, cf_rec.size);
+    if (cf_rec.size < __builtin_offsetof(cf_set_t, at_amount) + AT_COUNT) {
+        unsigned old_target = cs.seq_hint >> 3;
+        memset(cs.at_amount, 0, sizeof cs.at_amount);
+        cs.at_amount[old_target < AT_COUNT ? old_target : AT_CUTOFF] = 100;
+    }
     cfs_sanitize(&cs);
     cfs_saved = cfs_seen = cfs_fnv(&cs, sizeof cs);
     cfs_loaded = 1;
