@@ -89,7 +89,7 @@ int main(void)
     for (unsigned target = AT_TREMOLO; target < AT_COUNT; ++target) {
         web_enc(EMU_E_K4, 1);
         web_step(900);
-        assert(cf_at_amount[target] == 100);
+        assert(cf_at_amount[target] == cf_at_defaults[target]);
         unsigned hints = cs.seq_hint;
         cs.seq_hint = 0;
         cf_settings_load();
@@ -117,7 +117,29 @@ int main(void)
         assert(!cf_channel_pressure);
         expect_strikes(34);
     }
-    web_enc(EMU_E_K4, -4);
+    web_enc(EMU_E_K4, 1); /* Phaser -> Multi */
+    web_step(40);
+    assert(cs.at_mode == AT_COUNT);
+    web_enc(EMU_E_SELECT, -1); /* AT Mix */
+    web_step(40);
+    web_enc(EMU_E_K1, -4); /* browse cutoff */
+    web_step(40);
+    web_enc(EMU_E_K2, -2);
+    web_step(900);
+    assert(cf_at_amount[AT_CUTOFF] == 90 && cf_at_amount[AT_TREMOLO] == 25);
+    web_enc(EMU_E_SELECT, 1);
+    web_step(40);
+    web_enc(EMU_E_K4, -5); /* solo cutoff */
+    web_step(900);
+    assert(cf_at_amount[AT_CUTOFF] == 90 && !cf_at_amount[AT_TREMOLO]);
+    cs.at_amount[AT_CUTOFF] = cs.at_mode = cs.at_mix_mask = 0;
+    cf_settings_load();
+    cf_send_config();
+    assert(cs.at_amount[AT_CUTOFF] == 90 && cs.at_mix_mask == 3 && cs.at_mode == AT_CUTOFF);
+    web_enc(EMU_E_K4, 5);
+    web_step(40);
+    assert(cf_at_amount[AT_CUTOFF] == 90 && cf_at_amount[AT_TREMOLO] == 25);
+    web_enc(EMU_E_K4, -5);
     web_step(40);
 
     /* An unmapped landing expires and a short tap still sounds and releases. */

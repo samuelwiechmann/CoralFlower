@@ -2,7 +2,7 @@
 /* The CoralFlower core's descriptor (crf_desc.h). */
 #define FM1CORE_CRF_P cf
 #define FM1CORE_CRF_NAME "CoralFlower Expressive"
-#define FM1CORE_CRF_REPO "urn:coralflower-expressive:local-source"
+#define FM1CORE_CRF_REPO "https://github.com/samuelwiechmann/CoralFlower"
 /* CoralFlower's stickers (tools/emu/web/keymap.js BTN_ROLE), FM1P_B_* order */
 #define FM1CORE_CRF_BUTTONS                                                                                        \
     {"EFFECTS", "CHORD", "ENVELOPE", "BASS", "SOUND", "GLOBAL", "HOME", "SAVE", "ARP", "METRO", "PLAY", "REC",    \

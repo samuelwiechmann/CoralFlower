@@ -89,7 +89,10 @@ typedef struct {
                                   * CF_RESUME_SONG | the block the song's frame is on; 0 none. In what was the record's
                                   * padding byte: its size stays, 0.4.1 reads it */
     uint8_t at_amount[AT_COUNT]; /* Per-route depth, 0..100 percent */
+    uint8_t legacy_pad[3]; /* keep new fields past the padded 1.1 record */
+    uint8_t at_mode, at_mix_mask; /* AT_COUNT selects Multi */
 } cf_set_t;
+static const uint8_t cf_at_defaults[AT_COUNT] = {100, 25, 20, 100, 100};
 #define CF_RESUME_ON 0x80u
 #define CF_RESUME_SONG 0x40u
 #define CF_SET_MARK05 0xC5u    /* cs.mark: the record is 0.5's or later (out of 0.4.x's QUANT range, 0..2) */
@@ -141,8 +144,10 @@ static void cs_defaults(cf_set_t *s)
     s->ch_layer = 2;                             /* (channel 3) */
     s->ch_drums = 9;                             /* (channel 10: General MIDI's drums) */
     s->seq_hint = 0;
-    memset(s->at_amount, 0, sizeof s->at_amount);
-    s->at_amount[AT_CUTOFF] = 100;
+    memcpy(s->at_amount, cf_at_defaults, sizeof s->at_amount);
+    memset(s->legacy_pad, 0, sizeof s->legacy_pad);
+    s->at_mode = AT_CUTOFF;
+    s->at_mix_mask = (1u << AT_CUTOFF) | (1u << AT_TREMOLO);
     s->resume = 0;
 }
 

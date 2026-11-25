@@ -45,6 +45,7 @@ function play(target, lean, mix) {
     button(5); turn(0,-1); turn(3,1); turn(5,1);
     for (let i = 0; i < target; i++) turn(6,1);
     if (mix) {
+        turn(6,5); // select Multi
         turn(0,-1); // Expression -> AT Mix; K1 browses, K2 edits amount.
         for (const [role, steps] of mix) {
             if (steps) turn(role,steps); else step(48);

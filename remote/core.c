@@ -24,7 +24,7 @@
 #include "nor_stdio.h"
 #include "crf_sx_pre.h"                   /* the managers' SysEx: CRB_SEND on the glue's ring (crf_glue.h) */
 
-#define FELUCCA_VERSION "CoralFlower Expressive"
+#define FELUCCA_VERSION "CoralFlower Expressive 1.2"
 #include "tools/emu/emu_fw.c"
 
 #include "nor_stdio_end.h"

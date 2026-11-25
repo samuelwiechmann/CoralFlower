@@ -62,6 +62,8 @@ static void cfs_sanitize(cf_set_t *s)
     cf_set_t d;
     uint32_t i;
     cs_defaults(&d);
+    if (s->at_mode > AT_COUNT) s->at_mode = AT_CUTOFF;
+    s->at_mix_mask &= (1u << AT_COUNT) - 1u;
     for (unsigned i = 0; i < AT_COUNT; ++i)
         if (s->at_amount[i] > 100) s->at_amount[i] = 100;
     if (s->chord.algo >= CF_NALGS) s->chord.algo = d.chord.algo;
@@ -185,6 +187,19 @@ static int cf_settings_load(void)
         unsigned old_target = cs.seq_hint >> 3;
         memset(cs.at_amount, 0, sizeof cs.at_amount);
         cs.at_amount[old_target < AT_COUNT ? old_target : AT_CUTOFF] = 100;
+    }
+    if (cf_rec.size < __builtin_offsetof(cf_set_t, at_mix_mask) + 1u) {
+        unsigned only = AT_COUNT;
+        cs.at_mix_mask = 0;
+        for (unsigned i = 0; i < AT_COUNT; ++i) {
+            if (cs.at_amount[i]) {
+                cs.at_mix_mask |= 1u << i;
+                only = i;
+            } else {
+                cs.at_amount[i] = cf_at_defaults[i];
+            }
+        }
+        cs.at_mode = (cs.at_mix_mask & (cs.at_mix_mask - 1u)) ? AT_COUNT : only;
     }
     cfs_sanitize(&cs);
     cfs_saved = cfs_seen = cfs_fnv(&cs, sizeof cs);
