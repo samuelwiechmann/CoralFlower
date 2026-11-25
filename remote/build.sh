@@ -18,7 +18,7 @@ emcc -O2 -std=gnu11 -w -mcpu=mvp -msign-ext -mnontrapping-fptoint -mbulk-memory 
     "$v/core-glue/common/nor.c" "$v/core-glue/common/fifo.c" \
     --no-entry -sSTANDALONE_WASM -sFILESYSTEM=0 -sSTACK_SIZE=1048576 -sINITIAL_MEMORY=8388608 \
     -sALLOW_MEMORY_GROWTH=0 -sEXPORTED_FUNCTIONS=[] -o "$build/core.wasm"
-printf '{"id":"%s","name":"CoralFlower Expressive","version":"%s","license":"GPL-3.0-only","source_url":"https://github.com/samuelwiechmann/CoralFlower/tree/%s"}' "$id" "$version" "$revision" > "$build/descriptor.json"
+printf '{"id":"%s","name":"CoralFlower Expressive","version":"%s","license":"GPL-3.0-only","source_url":"https://github.com/samuelwiechmann/CoralFlower@%s"}' "$id" "$version" "$revision" > "$build/descriptor.json"
 licenses=(--license-file "GPL-3.0-only=LICENSE")
 for f in LICENSES/*.txt; do licenses+=(--license-file "$(basename "$f" .txt)=$f"); done
 out="$build/$id-$version.rfm1"
