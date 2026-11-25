@@ -18,7 +18,11 @@ static int32_t master_knob = 512 * 16;
 static inline uint32_t master_of_pot(uint32_t k10) { return (k10 * k10) >> 8; }   /* 0 .. ~4096 */
 static void master_poll(void)
 {
+    #ifdef FM1_INPUT_ANALOG
+    int32_t a = fm1_an.con ? (fm1_an.mvalid ? fm1_an.master : -1) : fm1_adc_read(FM1_ADC_MASTER);
+#else
     int32_t a = fm1_adc_read(FM1_ADC_MASTER);
+#endif
     if (a >= 0) {
         master_knob += (a * 16 - master_knob) / 8;
         song.master_q12 = master_of_pot((uint32_t)(master_knob / 16));

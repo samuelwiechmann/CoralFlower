@@ -58,3 +58,7 @@ by any of them.
 
 Contributions are welcome under GPL-3.0-only. Contact: iambemoli@gmail.com, Telegram channel
 <https://t.me/ficusficusov>.
+
+## CoralFlower Expressive
+
+The ADC and matrix-scan additions, integer key sensor and host sensor test are adapted from ChoralRoot FM-1 revision `47a2d8048fb43b35a667135836bce46da7310ad9`. ChoralRoot credits Charles Vestal's Velo and MONK-1 for the measurement and mapping, and CTL-1 for the top-row probe. The port and these local adaptations are GPL-3.0-only. The existing HAL attribution and sensor source notices accompany the files. The prototype bundle includes corresponding source and the upstream license texts. [ChoralRoot source](https://github.com/Quixotic7/ChoralRootFM1/tree/47a2d8048fb43b35a667135836bce46da7310ad9)

@@ -33,6 +33,7 @@ typedef struct {
     cf_set_t s;
 } cf_rec_t;
 _Static_assert(sizeof(cf_rec_t) <= ST_LOG_MAX, "settings: a record fits one log entry");
+_Static_assert(__builtin_offsetof(cf_set_t, expression) == 181u, "expression occupies legacy padding");
 _Static_assert(sizeof(cf_set_t) == 188u, "settings: 0.4.1 takes a record of this size (a new field fits the padding, "
                "or a downgrade loses the settings)");
 _Static_assert(__builtin_offsetof(cf_set_t, notes_in) == 172u && __builtin_offsetof(cf_set_t, mark) == 174u &&
@@ -92,6 +93,8 @@ static void cfs_sanitize(cf_set_t *s)
                 s->chord.top[i] = d.chord.top[i];
     }
     if (s->glide_ms > 2000u) s->glide_ms = d.glide_ms;
+    if ((s->expression & 0xe0u) != CF_EXPR_TAG || ((s->expression >> 2) & 7u) == 7u)
+        s->expression = CF_EXPR_DEFAULT;
     if (!s->vel || s->vel > 127u) s->vel = d.vel;
     if (s->bass_oct < -2 || s->bass_oct > 2) s->bass_oct = 0;
     if (s->bass_level > 127u) s->bass_level = d.bass_level;

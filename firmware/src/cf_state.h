@@ -79,6 +79,7 @@ typedef struct {
     uint8_t boot_sound;          /* GLO > Display > BOOT SOUND: the chime with the intro */
     uint8_t level_chord, level_layer, level_drums;   /* the parts' P_LEVEL (the sequencer's tracks, K1; the bass's:
                                                       * bass_level) */
+    uint8_t expression;          /* formerly alignment padding before snd_layer */
     uint16_t snd_layer;          /* the LAYER's sound (part 2): its index in the chord sounds' row; 0xFFFF: the default */
     uint8_t ch_layer, ch_drums;  /* GLO > Channels: the sequencer's LAYER and DRUMS out on MIDI, 0..15 */
     uint8_t seq_hint;            /* the SEQUENCER's hints shown once (0.4, cf_sequi.c SQH_*): bit 0 after the first
@@ -93,6 +94,10 @@ typedef struct {
 #define CF_SET_MARK05 0xC5u    /* cs.mark: the record is 0.5's or later (out of 0.4.x's QUANT range, 0..2) */
 #define CF_INCH_ALL 1u         /* cs.in_ch: every channel; 2..17 channels 1..16 */
 
+#define CF_EXPR_TAG 0xA0u
+#define CF_EXPR_VEL 1u
+#define CF_EXPR_AT 2u
+#define CF_EXPR_DEFAULT (CF_EXPR_TAG | (3u << 2))
 static cf_set_t cs;
 
 static void cs_defaults(cf_set_t *s)
@@ -101,6 +106,7 @@ static void cs_defaults(cf_set_t *s)
     s->glide_ms = 0;
     s->glide_always = 0;              /* Legato: a glide between held chords only */
     s->vel = 100;
+    s->expression = CF_EXPR_DEFAULT;
     s->bass_on = 1;
     s->octaver = 0;
     s->bass_oct = 0;

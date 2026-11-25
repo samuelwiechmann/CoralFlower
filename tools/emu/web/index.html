@@ -7,7 +7,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Play CoralFlower in your browser</title>
+<title>Play CoralFlower Expressive</title>
 <meta name="description" content="Play CoralFlower, chord firmware for the M-VAVE FM-1, in your browser. It’s the real firmware, compiled to WebAssembly, with sound.">
 <meta name="theme-color" content="#110A02">
 <meta property="og:title" content="Play CoralFlower in your browser">
@@ -56,6 +56,11 @@
         <svg id="panel" viewBox="14 14 876 538" role="application" tabindex="0" aria-label="The FM-1 panel: keys, buttons and knobs. Esc leaves it." aria-describedby="keys-help"></svg>
         <canvas id="mini" width="240" height="240" aria-hidden="true"></canvas>
       </div>
+      <details><summary>Simulate key expression</summary>
+        <p>Enable Velocity or Aftertouch in GLO → Expression. For pressure, enable the FX filter and lower its cutoff.</p>
+        <label>Next strike <input id="strike" type="range" min="1" max="127" value="100"></label>
+        <label>Held pressure <input id="pressure" type="range" min="0" max="127" value="0"></label>
+      </details>
       <div class="actions play__bar">
         <div class="meter" title="How much of each second the browser spends running the synth">Load <b><i id="load"></i></b> <span id="loadv">&ndash;</span></div>
         <button id="midi" class="btn btn--secondary btn--sm" type="button">Enable MIDI</button>

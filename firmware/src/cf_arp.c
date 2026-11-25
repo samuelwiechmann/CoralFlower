@@ -26,6 +26,7 @@ typedef struct {
     uint8_t on;                                      /* the player's view of cfp_cfg.arp_on (cfp_config moves it) */
     uint8_t mode;                                    /* the mode the pattern was started in */
     uint8_t n, note[CF_MAX_NOTES], order[CF_MAX_NOTES];   /* the chord: low to high, and in its tones' order */
+    uint8_t strike[CF_MAX_NOTES], strum_strike[CF_ARP_MAX];
     uint8_t latched;                                 /* the keys are up, LATCH keeps the chord */
     uint32_t idx;                                    /* steps played since the pattern started */
     uint8_t cur;                                     /* the note sounding (0: none) */
@@ -67,7 +68,7 @@ static uint64_t cfa_step_len(uint32_t idx)
 
 /* the pattern's n-th note: the chord (low to high, or in Order its tones' order) over OCTAVE octaves, walked as
  * the mode walks it */
-static int cfa_pick(uint32_t i)
+static int cfa_pick(uint32_t i, uint8_t *strike)
 {
     uint32_t n = cfa.n, oc = cfa_oct(), len = n * oc, k, j;
     const uint8_t *src = cfp_cfg.arp.mode == CF_ARP_ORDER ? cfa.order : cfa.note;
@@ -96,6 +97,11 @@ static int cfa_pick(uint32_t i)
     default: k = i % len; break;
     }
     j = k % n;
+    for (uint32_t q = 0; q < n; q++)
+        if (cfa.note[q] == src[j]) {
+            *strike = cfa.strike[q];
+            break;
+        }
     nt = src[j] + 12 * (int)(k / n);
     return nt > 127 ? src[j] : nt;
 }
@@ -129,13 +135,13 @@ static void cfa_stop(void)                           /* everything the arpeggiat
     cfa.latched = 0;
 }
 
-static void cfa_play(uint32_t note)
+static void cfa_play(uint32_t note, uint8_t strike)
 {
 #ifdef CF_TRACE
     fprintf(stderr, "%6u arp %u\n", (unsigned)cf_now_ms, (unsigned)note);
 #endif
     if (cfa_at == &cfa_k || !cfp_holds(cfa_part(), note))
-        cfp_on(cfa_part(), note, cfp_cfg.vel);       /* (the sequencer's: not over a note the keys hold) */
+        cfp_on(cfa_part(), note, strike ? strike : cfp_cfg.vel);       /* (the sequencer's: not over a note the keys hold) */
     cfa.steps++;
     cfa.last_note = (uint8_t)note;
 }
@@ -175,14 +181,15 @@ static uint32_t cfa_div64(uint64_t n, uint32_t d)
 
 static void cfa_step_n(uint64_t len)
 {
-    int nt = cfa_pick(cfa.idx);
+    uint8_t strike = 0;
+    int nt = cfa_pick(cfa.idx, &strike);
     uint32_t g = cfp_cfg.arp.gate >= 20u && cfp_cfg.arp.gate <= 100u ? cfp_cfg.arp.gate : 70u;
     cfa_note_off();
     cfa.idx++;
     if (nt < 0)
         return;
     cfa.cur = (uint8_t)nt;
-    cfa_play((uint32_t)nt);
+    cfa_play((uint32_t)nt, strike);
     /* the gate in samples: the step's (len / (BPM x 2400)) x GATE % (a full gate lets go just as the next comes) */
     {
         uint32_t st = cfa_div64(len, cfa_bpm() * 2400u);   /* (the step in samples; x GATE % without overflow) */
@@ -211,13 +218,18 @@ static void cfa_strum_start(void)
     cfa_strum_off();
     for (o = 0; o < oc; o++)
         for (i = 0; i < cfa.n && k < CF_ARP_MAX; i++)
-            if (cfa.note[i] + 12u * o <= 127u)
+            if (cfa.note[i] + 12u * o <= 127u) {
+                cfa.strum_strike[k] = cfa.strike[i];
                 cfa.snote[k++] = (uint8_t)(cfa.note[i] + 12u * o);
+            }
     if (cfp_cfg.arp.mode == CF_ARP_STRUM_DOWN)
         for (i = 0; i < k / 2u; i++) {
             uint8_t t = cfa.snote[i];
             cfa.snote[i] = cfa.snote[k - 1u - i];
             cfa.snote[k - 1u - i] = t;
+            t = cfa.strum_strike[i];
+            cfa.strum_strike[i] = cfa.strum_strike[k - 1u - i];
+            cfa.strum_strike[k - 1u - i] = t;
         }
     cfa.sn = (uint8_t)k;
     cfa.si = 0;
@@ -242,8 +254,10 @@ static int cfa_chord(const cf_chord_out_t *o, int m)
     fresh = !cfa.n || cfa.latched;
     cfa.latched = 0;
     cfa.n = (uint8_t)(m > CF_MAX_NOTES ? CF_MAX_NOTES : m);
-    for (i = 0; i < cfa.n; i++)
+    for (i = 0; i < cfa.n; i++) {
         cfa.note[i] = o->note[i];
+        cfa.strike[i] = cfa_at == &cfa_k ? cfp_note_strike(cfp_cp, o->note[i]) : 0;
+    }
     if (o->single) {                                 /* Order: single notes as the keys went down */
         int k = 0;
         for (i = 0; i < cfc.nroots && k < cfa.n; i++) {
@@ -293,7 +307,7 @@ static void cfa_tick(uint32_t n)
         uint32_t gap = cfp_cfg.arp.strum_ms >= 5u ? cfp_cfg.arp.strum_ms : 40u;
         while (cfa.si < cfa.sn && (int32_t)(cf_now_ms - cfa.sdue) >= 0) {
             cfa.son[cfa.si] = 1;
-            cfa_play(cfa.snote[cfa.si]);
+            cfa_play(cfa.snote[cfa.si], cfa.strum_strike[cfa.si]);
             cfa.si++;
             cfa.sdue += gap;
         }

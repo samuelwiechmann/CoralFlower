@@ -301,7 +301,11 @@ static void fm1_main(void)
         if (fm1_ms > BG_SETTLE_MS && bootguard.pending)  /* a crash or hang in the first 30 s counts */
             bootguard_settled(&bootguard);              /* (SAFE MODE stays for this session: cr_safe) */
         {
-            int32_t b = fm1_adc_read(FM1_ADC_BATT);     /* battery: slow IIR */
+#ifdef CF_UNIT
+            int32_t b = fm1_an.con ? (fm1_an.bvalid ? fm1_an.batt : -1) : fm1_adc_read(FM1_ADC_BATT);
+#else
+            int32_t b = fm1_adc_read(FM1_ADC_BATT);
+#endif
             if (b > 0)
                 song.batt_raw = song.batt_raw ? song.batt_raw + (b - song.batt_raw) / 32 : b;
         }

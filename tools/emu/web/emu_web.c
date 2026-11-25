@@ -199,6 +199,14 @@ WEB_EXPORT void web_boot(void)
 }
 
 /* ---------------------------------------------------------------------- input --- */
+WEB_EXPORT void web_expression(uint32_t key, uint32_t velocity, uint32_t pressure)
+{
+    if (key < CF_NKEYS) {
+        cf_sim_velocity[key] = velocity > 127u ? 127u : velocity;
+        cf_sim_pressure[key] = pressure > 127u ? 127u : pressure;
+    }
+}
+
 /* keys: bit n = note key n (0 = F3 .. 26 = G5); a key newly down also taps (a press shorter than 1 ms counts) */
 WEB_EXPORT void web_keys(uint32_t m)
 {

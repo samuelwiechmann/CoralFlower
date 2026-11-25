@@ -143,6 +143,7 @@ static const uint16_t CFX_DRIVE[101] = {   /* the distortion's drive, Q8: 1 .. 4
 static volatile uint32_t cfx_quiet;  /* blocks since the chain's output was last above -54 dBFS: a settings save waits
                                       * for a second of it (cf_settings.c), so a flash erase (the audio stops ~45 ms
                                       * on the unit) never lands in a reverb's or a delay's tail */
+static volatile uint8_t cf_channel_pressure;      /* UI writes, audio reads once per filter block */
 static cf_fx_t cfx_set;              /* the chain as the ISR uses it (cf_fx_apply copies cs.fx in, IRQ off) */
 static uint8_t cfx_ready;
 
@@ -222,6 +223,8 @@ static void cfx_filter(int32_t *l, int32_t *r, uint32_t n)
 {
     int32_t a1, a2, a3, k = cfx.fk, type = cfx_set.v[CFX_FILTER][0];
     uint32_t c, i;
+    uint32_t cutoff = cfx_set.v[CFX_FILTER][1] + (cf_channel_pressure * 40u + 63u) / 127u;
+    cfx.fg_t = CFX_G[cutoff > 99u ? 99u : cutoff];
     if (cfx.fg != cfx.fg_t || !cfx.fa1) {               /* the cutoff glides: a quarter of the way a block */
         int32_t d = cfx.fg_t - cfx.fg;
         cfx.fg += d / 4 ? d / 4 : d;

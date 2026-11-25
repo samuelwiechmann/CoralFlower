@@ -79,6 +79,24 @@ static uint32_t cf_now_ms, cf_ms_rem;                /* the engine clock: audio 
 static cf_chord_t cfc;                               /* the chord model: the ISR's */
 static cf_chord_cfg_t cfc_shadow;                    /* the UI's copy; CFE_CONFIG takes it (IRQ off while written) */
 static cf_play_cfg_t cfp_cfg = {0, 0, 100, 1, 0, 0, 1, 0, 1, 0, 0, CF_ARP_DEFAULT, 120, CF_LOOP_DEFAULT, 0};
+/* Zero selects the original fixed-velocity path, including external MIDI roots. */
+static uint8_t cfp_strike[CF_NKEYS], cfp_root_strike;
+static uint8_t cfp_note_strike(uint32_t part, uint32_t note)
+{
+    if (part != 1u && cfc.out.single) {
+        for (int i = cfc.nroots - 1; i >= 0; --i) {
+            int key = cfc.root_key[i];
+            if (cf_key_root_note(&cfc.cfg, key) == (int)note)
+                return key < CF_NKEYS ? cfp_strike[key] : 0;
+        }
+    }
+    return cfp_root_strike;
+}
+static uint32_t cfp_velocity(uint32_t part, uint32_t note)
+{
+    uint32_t strike = cfp_note_strike(part, note);
+    return strike ? strike : cfp_cfg.vel;
+}
 static uint8_t cfp_cp;                               /* the part the keys' chords sound on now (cfp_cfg.cpart, taken
                                                      * at a CFE_CONFIG with the notes let go) */
 static uint8_t cfp_bo;                               /* .. the bass alone (cfp_cfg.bass_only, taken likewise) */
@@ -212,7 +230,7 @@ static void cfp_fade_note(uint32_t part, uint32_t note)   /* .. one note's, let 
 static void cfp_change(uint32_t part, uint8_t *old, uint8_t *pn, const uint8_t *nw, int m, int mode)
 {
     int n = *pn, i, bass = part == 1u;           /* (the bass part: part 2 is the LAYER, a chord sound) */
-    uint32_t vel = cfp_cfg.vel, ticks = cfp_ticks();
+    uint32_t vel = cfp_root_strike ? cfp_root_strike : cfp_cfg.vel, ticks = cfp_ticks();
     if (bass && m)                                   /* the tails of bass notes let go before */
         cfp_bass_mono();
     if (mode == 6) {                                 /* single notes, a Glide time: the held ones stay where they are, a
@@ -234,7 +252,7 @@ static void cfp_change(uint32_t part, uint8_t *old, uint8_t *pn, const uint8_t *
         }
         for (i = 0; i < m; i++)
             if (!has(old, n, nw[i]))
-                cfp_on_from(part, nw[i], vel, cfp.slast, ticks);
+                cfp_on_from(part, nw[i], cfp_velocity(part, nw[i]), cfp.slast, ticks);
     } else if (!m || mode == 0 || mode == 3 || mode == 4) {   /* silence, or a fresh strike: everything restarts */
         uint8_t *prev = bass ? cfp.lastb : cfp.last, was[CF_MAX_NOTES];
         int np = bass ? cfp.nlb : cfp.nl;
@@ -255,16 +273,16 @@ static void cfp_change(uint32_t part, uint8_t *old, uint8_t *pn, const uint8_t *
                 if (!done[qj[x]]) {
                     done[qj[x]] = 1;
                     if (prev[pi[x]] == nw[qj[x]])
-                        cfp_on(part, nw[qj[x]], vel);
+                        cfp_on(part, nw[qj[x]], cfp_velocity(part, nw[qj[x]]));
                     else
-                        cfp_on_from(part, nw[qj[x]], vel, prev[pi[x]], ticks);
+                        cfp_on_from(part, nw[qj[x]], cfp_velocity(part, nw[qj[x]]), prev[pi[x]], ticks);
                 }
             for (i = 0; i < m; i++)
                 if (!done[i])
-                    cfp_on(part, nw[i], vel);
+                    cfp_on(part, nw[i], cfp_velocity(part, nw[i]));
         } else {
             for (i = 0; i < m; i++)
-                cfp_on(part, nw[i], vel);
+                cfp_on(part, nw[i], cfp_velocity(part, nw[i]));
         }
     } else if ((mode == 2 || mode == 5) && n) {     /* glide: the voices move (no Glide time: at once, RETRIG Off);
                                                       * 5 (RETRIG Notes): the notes that change strike, gliding */
@@ -332,7 +350,7 @@ static void cfp_change(uint32_t part, uint8_t *old, uint8_t *pn, const uint8_t *
             }
         for (i = 0; i < m; i++)                      /* (a target nobody reached: plainly) */
             if (!used_q[i])
-                cfp_on(part, nw[i], vel);
+                cfp_on(part, nw[i], cfp_velocity(part, nw[i]));
     } else {                                         /* re-voiced under a held root: the shared tones hold */
         for (i = 0; i < n; i++)
             if (!has(nw, m, old[i]))
@@ -341,7 +359,7 @@ static void cfp_change(uint32_t part, uint8_t *old, uint8_t *pn, const uint8_t *
             cfp_bass_mono();
         for (i = 0; i < m; i++)
             if (!has(old, n, nw[i]))
-                cfp_on(part, nw[i], vel);
+                cfp_on(part, nw[i], cfp_velocity(part, nw[i]));
     }
     if (n && !m) {                                   /* let go: remember what sounded, for Always */
         uint8_t *prev = bass ? cfp.lastb : cfp.last;
@@ -502,7 +520,7 @@ static void cfp_sync(int how)
 }
 
 #define CFP_GATHER_MS 50u                            /* a button this soon after a root is still that chord's */
-static void cfp_key(int key, int down)
+static void cfp_key(int key, int down, uint8_t strike)
 {
     int idx, role = key >= CF_KEY_EXT ? CF_ROLE_ROOT : cf_key_role(cfc.cfg.algo, key, &idx);   /* (an outside root) */
     /* RETRIG Wait: a button under held keys waits for the next root; but one pressed or let go just after a root went
@@ -511,9 +529,15 @@ static void cfp_key(int key, int down)
                (role != CF_ROLE_BUTTON || (uint32_t)(cf_now_ms - cfp.root_ms) >= CFP_GATHER_MS);
     if (role == CF_ROLE_ROOT && down)
         cfp.root_ms = cf_now_ms;
-    if (!cf_chord_key(&cfc, key, down))
-        return;
-    cfp_sync(role == CF_ROLE_ROOT && down ? 0 : 1);
+    if (role == CF_ROLE_ROOT && down && key < CF_NKEYS)
+        cfp_strike[key] = strike;
+    int changed = cf_chord_key(&cfc, key, down);
+    if (cfc.nroots) {
+        int root = cfc.root_key[cfc.nroots - 1];
+        cfp_root_strike = root < CF_NKEYS ? cfp_strike[root] : 0;
+    }
+    if (changed)
+        cfp_sync(role == CF_ROLE_ROOT && down ? 0 : 1);
 }
 
 static void cfp_config(void)                         /* CFE_CONFIG: the UI's settings */

@@ -39,6 +39,10 @@ static uint8_t sq_keys_arp(void);               /* (cf_sequi.c: the keys' ARP, a
 static void cf_send_config(void)                 /* the chord settings -> the audio side */
 {
     fm1_irq_off();
+#ifdef CR_SENSE_KEYS
+    cf_sense_config(cs.expression & (CF_EXPR_AT | CF_EXPR_VEL),
+                    cs.expression & CF_EXPR_VEL, (cs.expression >> 2) & 7u);
+#endif
     cfc_shadow = cs.chord;
     cfp_cfg.glide_always = cs.glide_always;
     cfp_cfg.vel = cs.vel;
@@ -361,6 +365,11 @@ static void ui_knob_info(int k, cf_knob_t *o)
             if (k == 2) { kfmt(o->name, 12, "LAYER CH"); kint(o->val, cs.ch_layer + 1, 0); }
             if (k == 3) { kfmt(o->name, 12, "DRUMS CH"); kint(o->val, cs.ch_drums + 1, 0); }
             break;
+        case 5:
+            if (k == 0) { kfmt(o->name, 12, "VELOCITY"); kfmt(o->val, 14, cs.expression & CF_EXPR_VEL ? "On" : "Off"); }
+            if (k == 1) { kfmt(o->name, 12, "SENS"); kint(o->val, 3 - (int)((cs.expression >> 2) & 7u), 0); }
+            if (k == 2) { kfmt(o->name, 12, "AFTERTOUCH"); kfmt(o->val, 14, cs.expression & CF_EXPR_AT ? "On" : "Off"); }
+            break;
         case 4: /* Reset: K4 the first step */
             if (k == 3) {
                 kfmt(o->name, 12, "ACTION");
@@ -575,6 +584,16 @@ static void ui_knob_turn(int k, int d)
                 cs.ch_drums = (uint8_t)clampi(cs.ch_drums + d, 0, 15);
             cf_send_config();
             break;
+        case 5:
+            if (k == 1) {
+                int curve = clampi((int)((cs.expression >> 2) & 7u) - d, 0, 6);
+                cs.expression = (cs.expression & ~28u) | (uint8_t)(curve << 2);
+            } else if (k == 0 || k == 2) {
+                uint8_t flag = k ? CF_EXPR_AT : CF_EXPR_VEL;
+                cs.expression = d > 0 ? cs.expression | flag : cs.expression & ~flag;
+            }
+            cf_send_config();
+            break;
         case 4:                                  /* Reset: K4 arms it (the steps after: SAVE) */
             if (k == 3 && !cfr.go) {
                 cfr.arm = (uint8_t)(d > 0);
@@ -633,7 +652,7 @@ static void ui_say(const char *a, const char *b)
 static uint32_t screen_pages(uint32_t scr)
 {
     if (scr == SCR_GLO)
-        return 5u;                               /* Display, MIDI, Channels, Play, Reset */
+        return 6u;                               /* Expression, Display, MIDI, Channels, Play, Reset */
     if (scr == SCR_ENV)
         return 3u;                               /* chord + bass, chord, bass */
     if (scr == SCR_ARP)
@@ -1250,6 +1269,7 @@ static void ui_snd_heard(uint32_t part)
     cfk_drop(0, part);
     cfk_take(part, 0);
 }
+#include "cf_expression.c"
 static void ui_note_key(int key, int down) { ui_note_key_aged(key, down, -1); }
 static void ui_note_key_aged(int key, int down, int age_ms)   /* age_ms: -1 the scan's (CF_KEY_T0) */
 {
@@ -1282,7 +1302,12 @@ static void ui_note_key_aged(int key, int down, int age_ms)   /* age_ms: -1 the 
                                                   * the frame let it through. The owner, 2026-10-20: a take from HOME
                                                   * "квантизируется не супер по таймингу") */
         uint32_t age = !down ? 0u : age_ms >= 0 ? (uint32_t)age_ms : (fm1_ticks() - CF_KEY_T0(key % 27)) / FM1_TICKS_PER_US / 1000u;
-        cf_post(CFE_KEY, (uint32_t)key, age <= 250u ? age : 0u, down);   /* (longer: stale, none) */
+        uint32_t strike = 0;
+        if (down && age_ms < 0 && cf_key_role(cs.chord.algo, key, &idx) == CF_ROLE_ROOT) {
+            cf_pressure_keys |= 1u << key;
+            strike = cf_key_strike(key);
+        }
+        cf_post(CFE_KEY, (uint32_t)key, age <= 250u ? age : 0u, down | (strike << 1));   /* (longer: stale, none) */
     }
 }
 
@@ -1359,7 +1384,34 @@ static void cf_ui_pump(void)
      * tap on a chord button went that way, and the roots played single notes (the owner, 2026-10-21: "после включения
      * если выбрать тип аккорда и начать играть, то сначала играются по одной ноте") */
     uint32_t now = fm1_in.notes, tap = fm1_input_note_edges() & ~now & ~cu.pkeys & ((1u << CF_NKEYS) - 1u);
-    uint32_t ch = ((now ^ cu.pkeys) | tap) & ~cu.xkeys, k, pass;   /* (a key held from outside too: no change) */
+    static uint32_t pending;
+    uint32_t ch, k, pass;
+    /* A root from the previous scan belongs to the selectors then down. If a
+     * selector changes before its ADC landing, play it at fallback velocity now. */
+    if (pending && cf_has_selector(((now ^ cu.pkeys) | tap) & ~cu.xkeys)) {
+        uint32_t flush = pending & ~cu.xkeys;
+        while (flush) {
+            unsigned key = __builtin_ctz(flush);
+            ui_note_key((int)key, 1);
+            cu.pkeys |= 1u << key;
+            flush &= flush - 1u;
+        }
+        pending = 0;
+    }
+    tap |= pending & ~now;
+    pending = 0;
+    if ((cs.expression & CF_EXPR_VEL) && cu.booted && !cf_has_selector(tap)) {
+        uint32_t fresh = now & ~cu.pkeys & ~cu.xkeys;
+        while (fresh) {
+            unsigned key = __builtin_ctz(fresh);
+            uint32_t bit = 1u << key;
+            fresh &= ~bit;
+            if (cf_wait_for_strike(key))
+                pending |= bit;
+        }
+        now &= ~pending;
+    }
+    ch = ((now ^ cu.pkeys) | tap) & ~cu.xkeys;   /* (a key held from outside too: no change) */
     if (!cu.booted)
         return;
     if (ch) {
@@ -1376,6 +1428,7 @@ static void cf_ui_pump(void)
                 ui_note_key((int)k, 0);
         cu.idle_ms = 0;
     }
+    cf_update_pressure(now, (cu.pkeys | tap) & ~now);
     cu.pkeys = now;
     cf_xq_drain();
     cu.keys = cu.pkeys | cu.xkeys;

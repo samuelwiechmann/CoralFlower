@@ -85,7 +85,7 @@ static void cf_boot_note(void);            /* (cf_fx.c) */
 #define FELUCCA_ID "FM-1_930"    /* package identity (build.py: the .fwsc marker string) */
 #endif
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "CoralFlower 0.1"
+#define FELUCCA_VERSION "CoralFlower Expressive"
 #endif
 #if FELUCCA_OTA && !FELUCCA_FLASH
 #error "FELUCCA_OTA needs FELUCCA_FLASH"
@@ -103,7 +103,16 @@ static void cf_boot_note(void);            /* (cf_fx.c) */
 #include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_guard.h"
+static void cr_sense_hook(uint32_t col, uint32_t rowbit, uint32_t v, uint32_t driven);
+static int cr_sense_drive_hook(uint32_t col, uint32_t rowbit);
+static int cr_sense_led_ok_hook(uint32_t col, uint32_t rowbit);
+static void cr_sense_probe_hook(uint32_t col, uint32_t v, uint32_t pressed);
+#define FM1_INPUT_PROBE(c, v, p) cr_sense_probe_hook(c, v, p)
+#define FM1_INPUT_ANALOG(c, r, v, d) cr_sense_hook(c, r, v, d)
+#define FM1_INPUT_DRIVE(c, r) cr_sense_drive_hook(c, r)
+#define FM1_INPUT_LED_OK(c, r) cr_sense_led_ok_hook(c, r)
 #include "fm1_input.h"
+#include "cr_sense.c"
 #include "fm1_timer.h"
 #include "fm1_audio.h"
 #include "fm1_adc.h"

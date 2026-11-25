@@ -201,10 +201,10 @@ static void cf_restrike(uint32_t part)
         return;
     if (part == cfp_cp)
         for (i = 0; i < cfp.n; i++)
-            trk_note_on(t, cfp.note[i], cfp_cfg.vel);
+            trk_note_on(t, cfp.note[i], cfp_velocity(cfp_cp, cfp.note[i]));
     if (part == 1u)
         for (i = 0; i < cfp.nb; i++)
-            trk_note_on(t, cfp.bass[i], cfp_cfg.vel);
+            trk_note_on(t, cfp.bass[i], cfp_velocity(1, cfp.bass[i]));
 }
 
 /* fx.c's, between two rendered blocks (after cr_audio_block): the releases asked for, the engine switches. A MIDI in
@@ -236,7 +236,7 @@ static void events_block(uint32_t n)
 /* ------------------------------------------------------------ the queue --- */
 /* UI -> ISR. One producer (the main loop), one consumer (the audio ISR): the index stores are the publication */
 enum {
-    CFE_KEY,          /* a: key 0..26, v: down */
+    CFE_KEY,          /* a: key 0..26, v: down bit 0, physical strike bits 1..7 */
     CFE_CONFIG,       /* the chord settings: cfc_shadow (cf_play.c) */
     CFE_PANIC,
     CFE_METRO,        /* a: on, b: level 0..100 */
@@ -534,14 +534,14 @@ static void cf_apply(const cf_ev_in_t *e)
             sqp.rage = e->b;                     /* (its age, ms: a take puts it back where it was played) */
             sqp_pre.key_ms = cf_now_ms - e->b;
         }
-        cfp_key(e->a, e->v);
+        cfp_key(e->a, !!e->v, (uint8_t)(e->v >> 1));
         break;
     case CFE_ROOT:
         if (e->v) {
             sqp.rage = e->b;
             sqp_pre.key_ms = cf_now_ms - e->b;
         }
-        cfp_key(CF_KEY_EXT + e->a, e->v);
+        cfp_key(CF_KEY_EXT + e->a, e->v, 0);
         break;
     case CFE_CONFIG: cfp_config(); break;
     case CFE_PANIC:

@@ -139,6 +139,11 @@
   const keySrc = Array.from({ length: 27 }, () => new Set()), btnSrc = Array.from({ length: 14 }, () => new Set());
   let selKnob = 3, node = null, sentK = -1, sentB = -1;
   const post = (m) => node && node.port.postMessage(m);
+  const simulate = (key) => post({ type: "expression", key, velocity: +$("strike").value,
+                                     pressure: +$("pressure").value });
+  $("pressure").addEventListener("input", () => keySrc.forEach((sources, key) => {
+    if (sources.size) simulate(key);
+  }));
   const publish = () => {
     let k = 0, b = 0;
     keySrc.forEach((s, i) => s.size && (k |= 1 << i));
@@ -152,6 +157,7 @@
   const hold = (c, src, down) => {   // c: "k5" / "b10"
     const set = (c[0] === "k" ? keySrc : btnSrc)[+c.slice(1)];
     if (!set) return;
+    if (down && !set.size && c[0] === "k" && src !== "cf") simulate(+c.slice(1));
     down ? set.add(src) : set.delete(src);
     publish();
   };
@@ -402,6 +408,7 @@
   // --------------------------------------------------------------------------------- window.cf ---
   // scripted tests: cf.keys([0, 7]) holds keys, cf.btn(6) taps a button, cf.turn(3, 2) turns KNOB 1 two detents
   window.cf = {
+    expression: (key, velocity, pressure) => post({ type: "expression", key, velocity, pressure }),
     keys: (list) => { releaseSrc((s) => s === "cf"); for (const k of list) hold("k" + k, "cf", true); },
     hold: (k, down = true) => hold("k" + k, "cf", down),
     btn: (i, ms = 80) => { hold("b" + i, "cf", true); setTimeout(() => hold("b" + i, "cf", false), ms); },

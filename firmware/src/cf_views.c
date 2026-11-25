@@ -351,6 +351,14 @@ static uint8_t cv_play_mark(int n)               /* (draw_keyline's marks: the s
         sc = cf_scale_step(cs.chord.scale, i) % 12 == pc;
     return sc ? FL_INK3 : 0;
 }
+static void view_expression(int x0)
+{
+    fb_text_c(&CF_FONT_UI, x0 + 108, VIEW_Y + 12, "Channel pressure", FL_INK2, 1);
+    fb_rect(x0 + 44, VIEW_Y + 35, 128, 5, FL_INK3);
+    if (cf_channel_pressure)
+        fb_rect(x0 + 44, VIEW_Y + 35, cf_channel_pressure, 5, C_ACC(1));
+}
+
 /* GLOBAL > Reset: what goes (the sounds, the patterns, the settings), three pictures; under them the step
  * the reset is at (cf_ui.c cfr): how to begin, the hold's bar, the last question with its seconds, the erase */
 static void view_reset(int x0)

@@ -1,4 +1,7 @@
-# CoralFlower
+# CoralFlower Expressive
+
+Experimental FM-1 fork on `feature/native-expression`. Physical strikes control live note velocity and held pressure opens the FX filter. Both features start off. See the [prototype guide](docs/EXPRESSION.md) for setup, the local package, validation, hardware tests and rollback. The links below describe upstream CoralFlower.
+
 
 **Your M-VAVE FM-1, made for chords.** CoralFlower is free firmware for the FM-1. Press a chord key, and every note
 you play becomes a whole chord, with a bass underneath. While you play, a pixel flower grows from your chords.
