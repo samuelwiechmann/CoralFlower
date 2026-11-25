@@ -1,6 +1,6 @@
 # CoralFlower Expressive
 
-CoralFlower Expressive adds key velocity, aftertouch and a saved five-effect pressure mix to CoralFlower. Choose a solo effect or Multi under GLO → Expression. Set each effect's amount and mix membership under GLO → AT Mix. [Download the FM-1 and RemoteFM1 releases](https://github.com/samuelwiechmann/CoralFlower/releases) or read the [playing and build guide](remote/README.md). The following sections describe upstream CoralFlower.
+CoralFlower Expressive adds key velocity, aftertouch and a saved five-effect pressure mix to CoralFlower. Choose a solo effect or Multi under GLO → Expression. Set each effect's amount and mix membership under GLO → AT Mix. [Download the FM-1 and RemoteFM1 releases](https://github.com/samuelwiechmann/CoralFlower/tree/expressive/downloads) or read the [playing and build guide](remote/README.md). The following sections describe upstream CoralFlower.
 
 
 **Your M-VAVE FM-1, made for chords.** CoralFlower is free firmware for the FM-1. Press a chord key, and every note
