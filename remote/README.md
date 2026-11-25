@@ -1,0 +1,1 @@
+CoralFlower Expressive 1.0 for RemoteFM1. GLO > Expression enables velocity and aftertouch. K4 selects Cutoff, Tremolo, Frequency Shift, Drive or Phaser. Build with Emscripten 6.0.13 and FM1VST c6f8de7b233ef4ef0343e4421083a8286ce57768 using remote/build.sh after generating the firmware headers.

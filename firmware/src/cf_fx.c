@@ -143,7 +143,61 @@ static const uint16_t CFX_DRIVE[101] = {   /* the distortion's drive, Q8: 1 .. 4
 static volatile uint32_t cfx_quiet;  /* blocks since the chain's output was last above -54 dBFS: a settings save waits
                                       * for a second of it (cf_settings.c), so a flash erase (the audio stops ~45 ms
                                       * on the unit) never lands in a reverb's or a delay's tail */
-static volatile uint8_t cf_channel_pressure;      /* UI writes, audio reads once per filter block */
+enum { AT_CUTOFF, AT_TREMOLO, AT_SHIFT, AT_DRIVE, AT_PHASER, AT_COUNT };
+static volatile uint8_t cf_channel_pressure, cf_pressure_target;
+static uint32_t cfx_mod_phase, cfx_shift_pos;
+static int32_t cfx_mod_depth, cfx_shift_history[2][32];
+
+/* Windowed 31-tap Hilbert transform. Pair antisymmetric taps around the
+ * delayed dry signal to produce quadrature for upper-sideband shifting. */
+static int32_t cfx_shift_sample(int32_t *history, unsigned pos, int32_t x,
+                                int32_t sine, int32_t cosine)
+{
+    static const int16_t coeff[8] = {20651, 6342, 3212, 1753, 925, 448, 204, 111};
+    int64_t q = 0;
+    history[pos] = x;
+    for (unsigned j = 0; j < 8; ++j) {
+        unsigned k = 2*j + 1;
+        q += (int64_t)coeff[j] * (history[(pos-15-k)&31] - history[(pos-15+k)&31]);
+    }
+    return (int32_t)(((int64_t)history[(pos-15)&31]*cosine - (q >> 15)*sine) >> 15);
+}
+
+static void cfx_pressure_mod(int32_t *l, int32_t *r, uint32_t n, unsigned target, unsigned pressure)
+{
+    static unsigned previous;
+    if (target != previous) {
+        cfx_mod_depth = 0;
+        cfx_mod_phase = 0;
+        if (target == AT_SHIFT)
+            memset(cfx_shift_history, 0, sizeof cfx_shift_history);
+        previous = target;
+    }
+    if (target != AT_TREMOLO && target != AT_SHIFT)
+        return;
+    int32_t goal = (int32_t)pressure * 32767 / 127;
+    if (!goal && !cfx_mod_depth)
+        return;
+    for (unsigned i = 0; i < n; ++i) {
+        int32_t delta = goal - cfx_mod_depth;
+        cfx_mod_depth += delta / 128 + (delta > 0 && delta < 128) - (delta < 0 && delta > -128);
+        int32_t sine = osc_sine(cfx_mod_phase);
+        if (target == AT_TREMOLO) {
+            int32_t loss = (int32_t)(((int64_t)cfx_mod_depth * (32767-sine)) >> 16);
+            l[i] -= (int32_t)(((int64_t)l[i]*loss) >> 15);
+            r[i] -= (int32_t)(((int64_t)r[i]*loss) >> 15);
+            cfx_mod_phase += 486958u; /* 5 Hz at 44.1 kHz */
+        } else {
+            int32_t cosine = osc_sine(cfx_mod_phase + 0x40000000u);
+            int32_t a = cfx_shift_sample(cfx_shift_history[0], cfx_shift_pos, l[i], sine, cosine);
+            int32_t b = cfx_shift_sample(cfx_shift_history[1], cfx_shift_pos, r[i], sine, cosine);
+            l[i] += (int32_t)(((int64_t)(a-l[i])*cfx_mod_depth) >> 15);
+            r[i] += (int32_t)(((int64_t)(b-r[i])*cfx_mod_depth) >> 15);
+            cfx_shift_pos = (cfx_shift_pos+1)&31;
+            cfx_mod_phase += 12u*974u*(unsigned)cfx_mod_depth/100u; /* about +39 Hz at full pressure */
+        }
+    }
+}
 static cf_fx_t cfx_set;              /* the chain as the ISR uses it (cf_fx_apply copies cs.fx in, IRQ off) */
 static uint8_t cfx_ready;
 
@@ -223,7 +277,8 @@ static void cfx_filter(int32_t *l, int32_t *r, uint32_t n)
 {
     int32_t a1, a2, a3, k = cfx.fk, type = cfx_set.v[CFX_FILTER][0];
     uint32_t c, i;
-    uint32_t cutoff = cfx_set.v[CFX_FILTER][1] + (cf_channel_pressure * 40u + 63u) / 127u;
+    unsigned pressure = cf_pressure_target == AT_CUTOFF ? cf_channel_pressure : 0;
+    uint32_t cutoff = cfx_set.v[CFX_FILTER][1] + (pressure * 40u + 63u) / 127u;
     cfx.fg_t = CFX_G[cutoff > 99u ? 99u : cutoff];
     if (cfx.fg != cfx.fg_t || !cfx.fa1) {               /* the cutoff glides: a quarter of the way a block */
         int32_t d = cfx.fg_t - cfx.fg;
@@ -678,6 +733,12 @@ static void cf_fx_chain(int32_t *l, int32_t *r, uint32_t n)
             cfx.fg = cfx.fg_t;
         cfx_filter_coefs();
     }
+    unsigned target = cf_pressure_target, pressure = cf_channel_pressure;
+    unsigned drive = cfx_set.v[CFX_DIST][0], sweep = cfx_set.v[CFX_PHASER][1];
+    if (target == AT_DRIVE) drive += (pressure * 50 + 63) / 127;
+    if (target == AT_PHASER) sweep += (pressure * 60 + 63) / 127;
+    cfx.dg = CFX_DRIVE[drive > 100 ? 100 : drive];
+    cfx.pdep = (int32_t)(sweep > 100 ? 100 : sweep) * 32 * 256 / 100;
     cfx_xf_prepare();
     for (i = 0; i < CFX_N; i++) {
         uint32_t e = cfx_set.order[i];
@@ -692,6 +753,7 @@ static void cf_fx_chain(int32_t *l, int32_t *r, uint32_t n)
         default: break;
         }
     }
+    cfx_pressure_mod(l, r, n, target, pressure);
 #if CF_VLOAD
     {
         uint32_t vl0 = VL_NOW();

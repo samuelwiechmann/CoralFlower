@@ -84,6 +84,42 @@ int main(void)
     keys(0, 80);
     assert(cfx.fg_t == CFX_G[40] && !cf_channel_pressure);
 
+    /* K4 selects a saved target. Feed a reproducible stereo tone through
+     * the two pressure-only effects and check full-pressure DSP and release. */
+    for (unsigned target = AT_TREMOLO; target < AT_COUNT; ++target) {
+        web_enc(EMU_E_K4, 1);
+        web_step(900);
+        assert(cf_pressure_target == target);
+        unsigned hints = cs.seq_hint;
+        cs.seq_hint = 0;
+        cf_settings_load();
+        assert(cs.seq_hint == hints);
+        keys(1u << root, 80);
+        assert(cf_channel_pressure == 127 && cfx.fg_t == CFX_G[40]);
+        if (target == AT_DRIVE || target == AT_PHASER) {
+            unsigned base = cs.fx.v[target == AT_DRIVE ? CFX_DIST : CFX_PHASER][target == AT_DRIVE ? 0 : 1];
+            unsigned value = base + (target == AT_DRIVE ? 50 : 60);
+            if (value > 100) value = 100;
+            if (target == AT_DRIVE) assert(cfx.dg == CFX_DRIVE[value]);
+            else assert(cfx.pdep == (int)value * 32 * 256 / 100);
+        } else {
+            int32_t left[128], right[128];
+            for (unsigned i = 0; i < 128; ++i) right[i] = left[i] = osc_sine(i * 97400000u);
+            cfx_pressure_mod(left, right, 128, target, 127);
+            unsigned changed = 0;
+            for (unsigned i = 0; i < 128; ++i) {
+                assert(left[i] == right[i] || i < 32);
+                changed += left[i] != osc_sine(i * 97400000u);
+            }
+            assert(changed > 64);
+        }
+        keys(0, 80);
+        assert(!cf_channel_pressure);
+        expect_strikes(34);
+    }
+    web_enc(EMU_E_K4, -4);
+    web_step(40);
+
     /* An unmapped landing expires and a short tap still sounds and releases. */
     web_expression(root, 0, 0);
     keys(1u << root, 8);

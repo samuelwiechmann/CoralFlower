@@ -36,9 +36,17 @@ static const char CF_NAME_CHARS[] = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-.+#/"
 static uint8_t sq_live_part(void);              /* (cf_sequi.c) */
 static uint8_t sq_live_bass(void);              /* (cf_sequi.c) */
 static uint8_t sq_keys_arp(void);               /* (cf_sequi.c: the keys' ARP, a track's own while it is open) */
+/* seq_hint bits 0..2 are the original sequencer hints. The previously zero
+ * upper bits keep the assignment without changing the saved record size. */
+static unsigned cf_at_target(void)
+{
+    unsigned target = cs.seq_hint >> 3;
+    return target < AT_COUNT ? target : AT_CUTOFF;
+}
 static void cf_send_config(void)                 /* the chord settings -> the audio side */
 {
     fm1_irq_off();
+    cf_pressure_target = (uint8_t)cf_at_target();
 #ifdef CR_SENSE_KEYS
     cf_sense_config(cs.expression & (CF_EXPR_AT | CF_EXPR_VEL),
                     cs.expression & CF_EXPR_VEL, (cs.expression >> 2) & 7u);
@@ -369,6 +377,11 @@ static void ui_knob_info(int k, cf_knob_t *o)
             if (k == 0) { kfmt(o->name, 12, "VELOCITY"); kfmt(o->val, 14, cs.expression & CF_EXPR_VEL ? "On" : "Off"); }
             if (k == 1) { kfmt(o->name, 12, "SENS"); kint(o->val, 3 - (int)((cs.expression >> 2) & 7u), 0); }
             if (k == 2) { kfmt(o->name, 12, "AFTERTOUCH"); kfmt(o->val, 14, cs.expression & CF_EXPR_AT ? "On" : "Off"); }
+            if (k == 3) {
+                static const char *const names[] = {"Cutoff", "Tremolo", "Freq shift", "Drive", "Phaser"};
+                kfmt(o->name, 12, "TARGET");
+                kfmt(o->val, 14, names[cf_at_target()]);
+            }
             break;
         case 4: /* Reset: K4 the first step */
             if (k == 3) {
@@ -591,6 +604,9 @@ static void ui_knob_turn(int k, int d)
             } else if (k == 0 || k == 2) {
                 uint8_t flag = k ? CF_EXPR_AT : CF_EXPR_VEL;
                 cs.expression = d > 0 ? cs.expression | flag : cs.expression & ~flag;
+            } else if (k == 3) {
+                unsigned target = (unsigned)clampi((int)cf_at_target() + d, 0, AT_COUNT - 1);
+                cs.seq_hint = (uint8_t)((cs.seq_hint & 7u) | (target << 3));
             }
             cf_send_config();
             break;
